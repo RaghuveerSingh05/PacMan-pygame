@@ -22,7 +22,7 @@ A recreation of the classic Pac-Man arcade game built with Python and Pygame. Na
 - A : Left
 - S : Down
 - D : Right
-- Enter : Restart (when Game Over!)
+- R : Restart (When Game Over or Win)
 - Esc : Quit
 
 ## Requirements
