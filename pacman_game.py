@@ -4,25 +4,26 @@ import math
 import random
 from collections import deque
 
-# ── Constants ──────────────────────────────────────────────────────────────────
-CELL  = 24
-COLS  = 28
-ROWS  = 31
-W     = COLS * CELL
-H     = ROWS * CELL + 60
-FPS   = 60
+pygame.init()
 
-BLACK   = (0,   0,   0)
-YELLOW  = (255, 220,  0)
-WHITE   = (255, 255, 255)
-BLUE    = (33,  33, 222)
-DBLUE   = (0,   0,  80)
-RED     = (220,  0,  0)
-PINK    = (255, 182, 255)
-CYAN    = (0,  220, 220)
-ORANGE  = (255, 165,  0)
-DGRAY   = (40,  40,  40)
-LBLUE   = (100, 100, 255)
+CELL = 24
+COLS = 28
+ROWS = 31
+W = COLS * CELL
+H = ROWS * CELL + 60
+FPS = 60
+
+BLACK = (0,0,0)
+YELLOW = (255,220,0)
+WHITE = (255,255,255)
+BLUE = (33,33,222)
+DBLUE = (0,0,80)
+RED = (220,0,0)
+PINK = (255,182,255)
+CYAN = (0,220,220)
+ORANGE = (255,165,0)
+DGRAY = (40,40,40)
+LBLUE = (100,100,255)
 
 RAW_MAZE = [
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWW",
@@ -58,38 +59,52 @@ RAW_MAZE = [
     "WWWWWWWWWWWWWWWWWWWWWWWWWWWW",
 ]
 
-WALL = 0; DOT = 1; POWER = 2; EMPTY = 3; DOOR = 4
+WALL = 0
+DOT = 1
+POWER = 2
+EMPTY = 3
+DOOR = 4
 
-def parse_maze():
+def make_maze():
     grid = []
     dots = []
     powers = []
-    for r, row in enumerate(RAW_MAZE):
-        line = []
-        for c, ch in enumerate(row):
-            if   ch == 'W': line.append(WALL)
-            elif ch == '.': line.append(DOT);   dots.append((c, r))
-            elif ch == 'o': line.append(POWER);  powers.append((c, r))
-            elif ch == '-': line.append(DOOR)
-            else:           line.append(EMPTY)
-        grid.append(line)
+    for r in range(31):
+        row = []
+        for c in range(28):
+            ch = RAW_MAZE[r][c]
+            if ch == 'W':
+                row.append(WALL)
+            elif ch == '.':
+                row.append(DOT)
+                dots.append((c, r))
+            elif ch == 'o':
+                row.append(POWER)
+                powers.append((c, r))
+            elif ch == '-':
+                row.append(DOOR)
+            else:
+                row.append(EMPTY)
+        grid.append(row)
     return grid, dots, powers
 
-UP    = (0, -1)
-DOWN  = (0,  1)
-LEFT  = (-1, 0)
-RIGHT = (1,  0)
-DIRS  = [UP, DOWN, LEFT, RIGHT]
+UP = (0, -1)
+DOWN = (0, 1)
+LEFT = (-1, 0)
+RIGHT = (1, 0)
+DIRS = [UP, DOWN, LEFT, RIGHT]
 
-def bfs_next(grid, start, target):
+def find_path(grid, start, target):
     sr, sc = start
     tr, tc = target
     if (sr, sc) == (tr, tc):
         return start
+    
     visited = {(sr, sc): None}
-    queue   = deque([(sr, sc)])
-    while queue:
-        r, c = queue.popleft()
+    q = deque([(sr, sc)])
+    
+    while q:
+        r, c = q.popleft()
         for dr, dc in DIRS:
             nr, nc = r+dr, c+dc
             if nr < 0 or nr >= 31 or nc < 0 or nc >= 28:
@@ -98,294 +113,334 @@ def bfs_next(grid, start, target):
                 continue
             if grid[nr][nc] == WALL:
                 continue
+            
             visited[(nr, nc)] = (r, c)
             if nr == tr and nc == tc:
                 cur = (nr, nc)
                 while visited[cur] != (sr, sc):
                     cur = visited[cur]
                 return cur
-            queue.append((nr, nc))
+            q.append((nr, nc))
     return start
 
 class Ghost:
-    SCATTER_CORNERS = {
-        'blinky': (25, 0),
-        'pinky':  (2,  0),
-        'inky':   (25, 30),
-        'clyde':  (2,  30),
-    }
-    COLORS = {
-        'blinky': RED,
-        'pinky':  PINK,
-        'inky':   CYAN,
-        'clyde':  ORANGE,
-    }
-
     def __init__(self, name, grid):
-        self.name  = name
-        self.color = self.COLORS[name]
-        self.grid  = grid
+        self.name = name
+        self.grid = grid
+        
+        if name == 'blinky':
+            self.color = RED
+            self.sx, self.sy = 13, 11
+            self.exit_wait = 0
+        elif name == 'pinky':
+            self.color = PINK
+            self.sx, self.sy = 13, 13
+            self.exit_wait = 60
+        elif name == 'inky':
+            self.color = CYAN
+            self.sx, self.sy = 11, 13
+            self.exit_wait = 120
+        else:
+            self.color = ORANGE
+            self.sx, self.sy = 15, 13
+            self.exit_wait = 180
+        
+        self.scatter = {
+            'blinky': (25, 0),
+            'pinky': (2, 0),
+            'inky': (25, 30),
+            'clyde': (2, 30)
+        }
+        
         self.reset()
-
+    
     def reset(self):
-        spawn = {'blinky':(13,11),'pinky':(13,13),'inky':(11,13),'clyde':(15,13)}
-        sx, sy = spawn[self.name]
-        self.col = sx; self.row = sy
-        self.px  = sx * CELL; self.py = sy * CELL
+        self.col = self.sx
+        self.row = self.sy
+        self.x = self.col * CELL
+        self.y = self.row * CELL
         self.dir = LEFT
-        self.frightened   = False
-        self.eaten        = False
-        self.exit_timer   = {'blinky':0,'pinky':60,'inky':120,'clyde':180}[self.name]
-        self.speed        = 1.5
-        self.fright_timer = 0
-
-    def target_cell(self, pac_col, pac_row, pac_dir, blinky_col, blinky_row):
-        if self.frightened:
+        self.scared = False
+        self.eaten = False
+        self.timer = self.exit_wait
+        self.speed = 1.5
+        self.scare_timer = 0
+    
+    def get_target(self, pc, pr, pd, bc, br):
+        if self.scared:
             return (random.randint(0,27), random.randint(0,30))
         if self.eaten:
             return (13, 13)
         if self.name == 'blinky':
-            return (pac_col, pac_row)
+            return (pc, pr)
         elif self.name == 'pinky':
-            return (pac_col + pac_dir[0]*4, pac_row + pac_dir[1]*4)
+            return (pc + pd[0]*4, pr + pd[1]*4)
         elif self.name == 'inky':
-            mid = (pac_col + pac_dir[0]*2, pac_row + pac_dir[1]*2)
-            return (2*mid[0]-blinky_col, 2*mid[1]-blinky_row)
+            mx = pc + pd[0]*2
+            my = pr + pd[1]*2
+            return (2*mx - bc, 2*my - br)
         else:
-            dist = math.hypot(self.col-pac_col, self.row-pac_row)
-            return (pac_col, pac_row) if dist > 8 else self.SCATTER_CORNERS['clyde']
-
-    def update(self, pac_col, pac_row, pac_dir, blinky_col, blinky_row):
-        speed = self.speed
-        if self.frightened: speed = 0.9
-        if self.eaten:      speed = 2.5
-
-        if self.exit_timer > 0:
-            self.exit_timer -= 1
+            d = math.hypot(self.col-pc, self.row-pr)
+            if d > 8:
+                return (pc, pr)
+            else:
+                return self.scatter['clyde']
+    
+    def move(self, pc, pr, pd, bc, br):
+        sp = self.speed
+        if self.scared:
+            sp = 0.9
+        if self.eaten:
+            sp = 2.5
+        
+        if self.timer > 0:
+            self.timer -= 1
             return
-
-        if self.fright_timer > 0:
-            self.fright_timer -= 1
-            if self.fright_timer == 0:
-                self.frightened = False
-
+        
+        if self.scare_timer > 0:
+            self.scare_timer -= 1
+            if self.scare_timer == 0:
+                self.scared = False
+        
         if self.eaten and (self.col, self.row) == (13, 13):
             self.eaten = False
-            self.frightened = False
-
-        target = self.target_cell(pac_col, pac_row, pac_dir, blinky_col, blinky_row)
-        cx = self.col * CELL; cy = self.row * CELL
-        if abs(self.px - cx) < speed and abs(self.py - cy) < speed:
-            self.px = cx; self.py = cy
-            next_cell = bfs_next(self.grid, (self.row, self.col), (target[1], target[0]))
+            self.scared = False
+        
+        tx, ty = self.get_target(pc, pr, pd, bc, br)
+        
+        cx = self.col * CELL
+        cy = self.row * CELL
+        
+        if abs(self.x - cx) < sp and abs(self.y - cy) < sp:
+            self.x = cx
+            self.y = cy
+            next_cell = find_path(self.grid, (self.row, self.col), (ty, tx))
             if next_cell != (self.row, self.col):
                 nr, nc = next_cell
                 self.dir = (nc - self.col, nr - self.row)
             else:
                 random.shuffle(DIRS)
                 for d in DIRS:
-                    nc2, nr2 = self.col+d[0], self.row+d[1]
-                    if 0<=nr2<31 and 0<=nc2<28 and self.grid[nr2][nc2] != WALL:
-                        self.dir = d; break
-
-        self.px += self.dir[0] * speed
-        self.py += self.dir[1] * speed
-        if self.px < -CELL:      self.px = W
-        elif self.px > W:        self.px = -CELL
-        self.col = round(self.px / CELL)
-        self.row = round(self.py / CELL)
+                    nx = self.col + d[0]
+                    ny = self.row + d[1]
+                    if 0 <= ny < 31 and 0 <= nx < 28 and self.grid[ny][nx] != WALL:
+                        self.dir = d
+                        break
+        
+        self.x += self.dir[0] * sp
+        self.y += self.dir[1] * sp
+        
+        if self.x < -CELL:
+            self.x = W
+        elif self.x > W:
+            self.x = -CELL
+        
+        self.col = round(self.x / CELL)
+        self.row = round(self.y / CELL)
         self.col = max(0, min(27, self.col))
         self.row = max(0, min(30, self.row))
-
-    def frighten(self):
+    
+    def scare(self):
         if not self.eaten:
-            self.frightened   = True
-            self.fright_timer = 6 * FPS
-
+            self.scared = True
+            self.scare_timer = 6 * FPS
+    
     def draw(self, surf):
-        cx = int(self.px) + CELL//2
-        cy = int(self.py) + CELL//2 + 60
-        r  = CELL//2 - 1
-
-        if self.frightened:
-            t = self.fright_timer
-            col = LBLUE if t > FPS*2 or (t // 8) % 2 == 0 else WHITE
+        cx = int(self.x) + CELL//2
+        cy = int(self.y) + CELL//2 + 60
+        r = CELL//2 - 1
+        
+        if self.scared:
+            if self.scare_timer > FPS*2 or (self.scare_timer // 8) % 2 == 0:
+                col = LBLUE
+            else:
+                col = WHITE
         elif self.eaten:
             col = WHITE
         else:
             col = self.color
-
+        
         if self.eaten:
-            for ex, ey in [(-4, -3), (4, -3)]:
-                pygame.draw.circle(surf, WHITE, (cx+ex, cy+ey), 3)
-                pygame.draw.circle(surf, BLUE,  (cx+ex+1, cy+ey+1), 2)
+            pygame.draw.circle(surf, WHITE, (cx-4, cy-3), 3)
+            pygame.draw.circle(surf, WHITE, (cx+4, cy-3), 3)
+            pygame.draw.circle(surf, BLUE, (cx-3, cy-2), 2)
+            pygame.draw.circle(surf, BLUE, (cx+5, cy-2), 2)
             return
-
+        
         pygame.draw.circle(surf, col, (cx, cy), r)
         pygame.draw.rect(surf, col, (cx-r, cy, r*2, r))
-        for i in range(3):
-            x0 = cx - r + i*(r*2//3)
-            pygame.draw.circle(surf, BLACK, (x0 + (r//3), cy+r), r//3)
         
-        if not self.frightened:
-            for ex, ey in [(-4, -3), (4, -3)]:
-                pygame.draw.circle(surf, WHITE, (cx+ex, cy+ey), 3)
-                pygame.draw.circle(surf, BLUE,  (cx+ex+1, cy+ey+1), 2)
+        for i in range(3):
+            xo = cx - r + i*(r*2//3)
+            pygame.draw.circle(surf, BLACK, (xo + (r//3), cy+r), r//3)
+        
+        if not self.scared:
+            pygame.draw.circle(surf, WHITE, (cx-4, cy-3), 3)
+            pygame.draw.circle(surf, WHITE, (cx+4, cy-3), 3)
+            pygame.draw.circle(surf, BLUE, (cx-3, cy-2), 2)
+            pygame.draw.circle(surf, BLUE, (cx+5, cy-2), 2)
         else:
             pygame.draw.circle(surf, WHITE, (cx-4, cy-2), 2)
             pygame.draw.circle(surf, WHITE, (cx+4, cy-2), 2)
             pts = [(cx-5,cy+3),(cx-3,cy+1),(cx-1,cy+3),(cx+1,cy+1),(cx+3,cy+3),(cx+5,cy+1)]
             pygame.draw.lines(surf, WHITE, False, pts, 1)
 
-# ── SIMPLIFIED PERFECT PAC-MAN - Draws circle with mouth cutout ───────────────
 class PacMan:
     def __init__(self):
         self.reset()
-
+    
     def reset(self):
-        self.col   = 14; self.row = 23
-        self.px    = self.col * CELL
-        self.py    = self.row * CELL
-        self.dir   = LEFT
-        self.next_dir = LEFT
+        self.col = 14
+        self.row = 23
+        self.x = self.col * CELL
+        self.y = self.row * CELL
+        self.dir = LEFT
+        self.next = LEFT
         self.speed = 2.0
-        self.mouth_angle = 45
-        self.mouth_opening = False
-        self.animation_counter = 0
+        self.mouth = 45
+        self.opening = False
+        self.counter = 0
         self.alive = True
-        self.death_frame = 0
-
+        self.death = 0
+    
     def set_dir(self, d):
-        self.next_dir = d
-
+        self.next = d
+    
     def can_move(self, grid, col, row, d):
-        nc, nr = col + d[0], row + d[1]
-        if nc < 0 or nc >= 28 or nr < 0 or nr >= 31:
+        nx = col + d[0]
+        ny = row + d[1]
+        if nx < 0 or nx >= 28 or ny < 0 or ny >= 31:
             return True
-        return grid[nr][nc] not in (WALL, DOOR)
-
+        return grid[ny][nx] not in (WALL, DOOR)
+    
     def update(self, grid):
         if not self.alive:
-            self.death_frame += 1
+            self.death += 1
             return
-
-        self.animation_counter += 1
-        if self.animation_counter >= 4:
-            self.animation_counter = 0
-            if self.mouth_opening:
-                self.mouth_angle += 10
-                if self.mouth_angle >= 75:
-                    self.mouth_opening = False
+        
+        self.counter += 1
+        if self.counter >= 4:
+            self.counter = 0
+            if self.opening:
+                self.mouth += 10
+                if self.mouth >= 75:
+                    self.opening = False
             else:
-                self.mouth_angle -= 10
-                if self.mouth_angle <= 15:
-                    self.mouth_opening = True
-
-        cx = self.col * CELL; cy = self.row * CELL
-        aligned = abs(self.px - cx) < self.speed and abs(self.py - cy) < self.speed
-
+                self.mouth -= 10
+                if self.mouth <= 15:
+                    self.opening = True
+        
+        cx = self.col * CELL
+        cy = self.row * CELL
+        aligned = abs(self.x - cx) < self.speed and abs(self.y - cy) < self.speed
+        
         if aligned:
-            self.px = cx; self.py = cy
-            if self.can_move(grid, self.col, self.row, self.next_dir):
-                self.dir = self.next_dir
+            self.x = cx
+            self.y = cy
+            if self.can_move(grid, self.col, self.row, self.next):
+                self.dir = self.next
             if not self.can_move(grid, self.col, self.row, self.dir):
                 return
-
-        self.px += self.dir[0] * self.speed
-        self.py += self.dir[1] * self.speed
-
-        if self.px < -CELL:  self.px = W
-        elif self.px > W:    self.px = -CELL
-
-        self.col = round(self.px / CELL)
-        self.row = round(self.py / CELL)
+        
+        self.x += self.dir[0] * self.speed
+        self.y += self.dir[1] * self.speed
+        
+        if self.x < -CELL:
+            self.x = W
+        elif self.x > W:
+            self.x = -CELL
+        
+        self.col = round(self.x / CELL)
+        self.row = round(self.y / CELL)
         self.col = max(0, min(27, self.col))
         self.row = max(0, min(30, self.row))
-
+    
     def draw(self, surf):
-        cx = int(self.px) + CELL//2
-        cy = int(self.py) + CELL//2 + 60
+        cx = int(self.x) + CELL//2
+        cy = int(self.y) + CELL//2 + 60
         r = CELL//2 - 2
-
+        
         if not self.alive:
-            frac = max(0, 1 - self.death_frame / 40)
-            r2 = int(r * frac)
+            f = max(0, 1 - self.death / 40)
+            r2 = int(r * f)
             if r2 > 0:
                 pygame.draw.circle(surf, YELLOW, (cx, cy), r2)
             return
-
-        # Draw the main yellow circle
+        
         pygame.draw.circle(surf, YELLOW, (cx, cy), r)
         
-        # Calculate mouth triangle points based on direction
-        mouth_size = int(r * (self.mouth_angle / 90))  # Scale mouth size with angle
+        mouth_size = int(r * (self.mouth / 90))
         
         if self.dir == RIGHT:
-            # Mouth pointing RIGHT
-            point1 = (cx + r, cy - mouth_size)
-            point2 = (cx + r, cy + mouth_size)
-            point3 = (cx, cy)
+            p1 = (cx + r, cy - mouth_size)
+            p2 = (cx + r, cy + mouth_size)
+            p3 = (cx, cy)
         elif self.dir == LEFT:
-            # Mouth pointing LEFT
-            point1 = (cx - r, cy - mouth_size)
-            point2 = (cx - r, cy + mouth_size)
-            point3 = (cx, cy)
+            p1 = (cx - r, cy - mouth_size)
+            p2 = (cx - r, cy + mouth_size)
+            p3 = (cx, cy)
         elif self.dir == UP:
-            # Mouth pointing UP
-            point1 = (cx - mouth_size, cy - r)
-            point2 = (cx + mouth_size, cy - r)
-            point3 = (cx, cy)
-        else:  # DOWN
-            # Mouth pointing DOWN
-            point1 = (cx - mouth_size, cy + r)
-            point2 = (cx + mouth_size, cy + r)
-            point3 = (cx, cy)
+            p1 = (cx - mouth_size, cy - r)
+            p2 = (cx + mouth_size, cy - r)
+            p3 = (cx, cy)
+        else:
+            p1 = (cx - mouth_size, cy + r)
+            p2 = (cx + mouth_size, cy + r)
+            p3 = (cx, cy)
         
-        # Draw the mouth (black triangle cutout)
-        pygame.draw.polygon(surf, BLACK, [point1, point2, point3])
+        pygame.draw.polygon(surf, BLACK, [p1, p2, p3])
 
 class Game:
     def __init__(self):
-        pygame.init()
-        pygame.display.set_caption("PAC-MAN")
         self.screen = pygame.display.set_mode((W, H))
-        self.clock  = pygame.time.Clock()
-        self.font_big   = pygame.font.SysFont("monospace", 28, bold=True)
-        self.font_small = pygame.font.SysFont("monospace", 18, bold=True)
+        pygame.display.set_caption("PAC-MAN")
+        self.clock = pygame.time.Clock()
+        self.font1 = pygame.font.SysFont("monospace", 28, bold=True)
+        self.font2 = pygame.font.SysFont("monospace", 18, bold=True)
         self.new_game()
-
+    
     def new_game(self):
-        self.grid, self.dots, self.powers = parse_maze()
-        self.remaining = set(map(tuple, self.dots)) | set(map(tuple, self.powers))
+        self.grid, self.dots, self.powers = make_maze()
+        self.remaining = set(self.dots) | set(self.powers)
         self.score = 0
         self.lives = 3
         self.level = 1
         self.state = 'playing'
         self.death_timer = 0
-        self.ghost_combo = 0
+        self.combo = 0
         self.pac = PacMan()
-        self.ghosts = [Ghost(n, self.grid) for n in ('blinky','pinky','inky','clyde')]
-
+        self.ghosts = [
+            Ghost('blinky', self.grid),
+            Ghost('pinky', self.grid),
+            Ghost('inky', self.grid),
+            Ghost('clyde', self.grid)
+        ]
+    
     def respawn(self):
         self.pac = PacMan()
         for g in self.ghosts:
             g.reset()
-        self.ghost_combo = 0
-
-    def handle_input(self):
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
-            if ev.type == pygame.KEYDOWN:
+        self.combo = 0
+    
+    def check_keys(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
                 if self.state in ('dead','gameover','win'):
-                    if ev.key == pygame.K_RETURN:
+                    if event.key == pygame.K_RETURN:
                         self.new_game()
                     return
-                if ev.key == pygame.K_LEFT:  self.pac.set_dir(LEFT)
-                if ev.key == pygame.K_RIGHT: self.pac.set_dir(RIGHT)
-                if ev.key == pygame.K_UP:    self.pac.set_dir(UP)
-                if ev.key == pygame.K_DOWN:  self.pac.set_dir(DOWN)
-
+                if event.key == pygame.K_a:
+                    self.pac.set_dir(LEFT)
+                if event.key == pygame.K_d:
+                    self.pac.set_dir(RIGHT)
+                if event.key == pygame.K_w:
+                    self.pac.set_dir(UP)
+                if event.key == pygame.K_s:
+                    self.pac.set_dir(DOWN)
+    
     def update(self):
         if self.state != 'playing':
             if self.state == 'dead':
@@ -398,92 +453,96 @@ class Game:
                         self.respawn()
                         self.state = 'playing'
             return
-
+        
         self.pac.update(self.grid)
-        blinky = self.ghosts[0]
+        
+        bx = self.ghosts[0].col
+        by = self.ghosts[0].row
+        
         for g in self.ghosts:
-            g.update(self.pac.col, self.pac.row, self.pac.dir, blinky.col, blinky.row)
-
+            g.move(self.pac.col, self.pac.row, self.pac.dir, bx, by)
+        
         pos = (self.pac.col, self.pac.row)
         if pos in self.remaining:
             cell = self.grid[pos[1]][pos[0]]
-            self.remaining.discard(pos)
+            self.remaining.remove(pos)
             self.grid[pos[1]][pos[0]] = EMPTY
             if cell == DOT:
                 self.score += 10
             elif cell == POWER:
                 self.score += 50
-                self.ghost_combo = 0
+                self.combo = 0
                 for g in self.ghosts:
-                    g.frighten()
-
+                    g.scare()
+        
         if not self.remaining:
             self.state = 'win'
             return
-
+        
         for g in self.ghosts:
-            dist = math.hypot(g.px - self.pac.px, g.py - self.pac.py)
-            if dist < CELL * 0.8:
-                if g.frightened and not g.eaten:
+            d = math.hypot(g.x - self.pac.x, g.y - self.pac.y)
+            if d < CELL * 0.8:
+                if g.scared and not g.eaten:
                     g.eaten = True
-                    g.frightened = False
-                    self.ghost_combo += 1
-                    self.score += 200 * (2 ** (self.ghost_combo - 1))
-                elif not g.frightened and not g.eaten:
+                    g.scared = False
+                    self.combo += 1
+                    self.score += 200 * (2 ** (self.combo - 1))
+                elif not g.scared and not g.eaten:
                     self.lives -= 1
                     self.pac.alive = False
                     self.state = 'dead'
                     self.death_timer = 60
                     return
-
+    
     def draw_maze(self):
-        surf = self.screen
-        surf.fill(BLACK)
         for r in range(31):
             for c in range(28):
-                x = c * CELL; y = r * CELL + 60
+                x = c * CELL
+                y = r * CELL + 60
                 cell = self.grid[r][c]
                 if cell == WALL:
-                    pygame.draw.rect(surf, BLUE, (x+1, y+1, CELL-2, CELL-2), border_radius=3)
-                    pygame.draw.rect(surf, DBLUE, (x+2, y+2, CELL-4, CELL-4), border_radius=2)
+                    pygame.draw.rect(self.screen, BLUE, (x+1, y+1, CELL-2, CELL-2), border_radius=3)
+                    pygame.draw.rect(self.screen, DBLUE, (x+2, y+2, CELL-4, CELL-4), border_radius=2)
                 elif cell == DOT:
-                    pygame.draw.circle(surf, WHITE, (x+CELL//2, y+CELL//2), 2)
+                    pygame.draw.circle(self.screen, WHITE, (x+CELL//2, y+CELL//2), 2)
                 elif cell == POWER:
                     t = pygame.time.get_ticks()
                     pulse = int(4 + 3*math.sin(t/200))
-                    pygame.draw.circle(surf, WHITE, (x+CELL//2, y+CELL//2), pulse)
+                    pygame.draw.circle(self.screen, WHITE, (x+CELL//2, y+CELL//2), pulse)
                 elif cell == DOOR:
-                    pygame.draw.rect(surf, PINK, (x, y+CELL//2-2, CELL, 4))
-
+                    pygame.draw.rect(self.screen, PINK, (x, y+CELL//2-2, CELL, 4))
+    
     def draw_hud(self):
-        surf = self.screen
-        pygame.draw.rect(surf, DGRAY, (0, 0, W, 56))
-        sc = self.font_big.render(f"SCORE {self.score:06d}", True, WHITE)
-        surf.blit(sc, (10, 12))
-        lv = self.font_small.render(f"LVL {self.level}", True, YELLOW)
-        surf.blit(lv, (W - 90, 18))
+        pygame.draw.rect(self.screen, DGRAY, (0, 0, W, 56))
+        
+        txt = self.font1.render(f"SCORE {self.score:06d}", True, WHITE)
+        self.screen.blit(txt, (10, 12))
+        
+        txt = self.font2.render(f"LVL {self.level}", True, YELLOW)
+        self.screen.blit(txt, (W - 90, 18))
+        
         for i in range(self.lives):
             cx = W//2 - 40 + i*26
             cy = 30
-            pygame.draw.circle(surf, YELLOW, (cx, cy), 9)
-            pygame.draw.polygon(surf, BLACK, [(cx, cy), (cx+9, cy-6), (cx+9, cy+6)])
-
+            pygame.draw.circle(self.screen, YELLOW, (cx, cy), 9)
+            pygame.draw.polygon(self.screen, BLACK, [(cx, cy), (cx+9, cy-6), (cx+9, cy+6)])
+    
     def draw_overlay(self):
-        surf = self.screen
         if self.state == 'gameover':
-            txt1 = self.font_big.render("GAME  OVER", True, RED)
-            txt2 = self.font_small.render("Press ENTER to restart", True, WHITE)
-            surf.blit(txt1, (W//2 - txt1.get_width()//2, H//2 - 30))
-            surf.blit(txt2, (W//2 - txt2.get_width()//2, H//2 + 10))
+            txt1 = self.font1.render("GAME OVER", True, RED)
+            txt2 = self.font2.render("Press ENTER to restart", True, WHITE)
+            self.screen.blit(txt1, (W//2 - txt1.get_width()//2, H//2 - 30))
+            self.screen.blit(txt2, (W//2 - txt2.get_width()//2, H//2 + 10))
         elif self.state == 'win':
-            txt1 = self.font_big.render("YOU  WIN!", True, YELLOW)
-            txt2 = self.font_small.render("Press ENTER to restart", True, WHITE)
-            surf.blit(txt1, (W//2 - txt1.get_width()//2, H//2 - 30))
-            surf.blit(txt2, (W//2 - txt2.get_width()//2, H//2 + 10))
-
+            txt1 = self.font1.render("YOU WIN!", True, YELLOW)
+            txt2 = self.font2.render("Press ENTER to restart", True, WHITE)
+            self.screen.blit(txt1, (W//2 - txt1.get_width()//2, H//2 - 30))
+            self.screen.blit(txt2, (W//2 - txt2.get_width()//2, H//2 + 10))
+    
     def run(self):
         while True:
-            self.handle_input()
+            self.screen.fill(BLACK)
+            self.check_keys()
             self.update()
             self.draw_maze()
             self.pac.draw(self.screen)
