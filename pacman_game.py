@@ -552,6 +552,7 @@ class Game:
             self.draw_overlay()
             pygame.display.flip()
             self.clock.tick(FPS)
+            
 
 if __name__ == '__main__':
     Game().run()
