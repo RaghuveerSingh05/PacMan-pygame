@@ -1,6 +1,6 @@
 ## PAC-MAN - Classic Arcade Game
 
-A faithful recreation of the classic Pac-Man arcade game built with Python and Pygame. Navigate through the maze, collect dots, avoid ghosts, and use power pellets to turn the tables on your pursuers!
+A recreation of the classic Pac-Man arcade game built with Python and Pygame. Navigate through the maze, collect dots, avoid ghosts, and use power pellets to turn the tables on your pursuers!
 
 ## Features
 
@@ -29,5 +29,5 @@ A faithful recreation of the classic Pac-Man arcade game built with Python and P
 
 ## Requirements
 
-- Python 3.7+
-- Pygame 2.0+
+- Python 3.12.5
+- Pygame 2.6.1
