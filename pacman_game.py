@@ -429,7 +429,7 @@ class Game:
                 sys.exit()
             if event.type == pygame.KEYDOWN:
                 if self.state in ('dead','gameover','win'):
-                    if event.key == pygame.K_RETURN:
+                    if event.key == pygame.K_r:
                         self.new_game()
                     return
                 if event.key == pygame.K_a:
@@ -530,12 +530,12 @@ class Game:
     def draw_overlay(self):
         if self.state == 'gameover':
             txt1 = self.font1.render("GAME OVER", True, RED)
-            txt2 = self.font2.render("Press ENTER to restart", True, WHITE)
+            txt2 = self.font2.render("Press R to restart", True, WHITE)
             self.screen.blit(txt1, (W//2 - txt1.get_width()//2, H//2 - 30))
             self.screen.blit(txt2, (W//2 - txt2.get_width()//2, H//2 + 10))
         elif self.state == 'win':
             txt1 = self.font1.render("YOU WIN!", True, YELLOW)
-            txt2 = self.font2.render("Press ENTER to restart", True, WHITE)
+            txt2 = self.font2.render("Press R to restart", True, WHITE)
             self.screen.blit(txt1, (W//2 - txt1.get_width()//2, H//2 - 30))
             self.screen.blit(txt2, (W//2 - txt2.get_width()//2, H//2 + 10))
     
